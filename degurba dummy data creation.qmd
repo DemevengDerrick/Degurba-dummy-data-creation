@@ -3,10 +3,235 @@ title: "degurba dummy data creation"
 Author: "Derrick Demeveng"
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+## Load Libraries
 
 ```{r}
-1 + 1
+
+if(!require("pacman")) install.packages("pacman")
+
+pacman::p_load(
+  tidyverse,
+  ggplot2,
+  sf,
+  haven,
+  gt,
+  tmap,
+  RColorBrewer
+)
+```
+
+## Load Data
+
+GPS locations of buildings hosting households
+
+```{r}
+
+gps_points <- sf::st_read("input/jrc_data/point_dummy_mw_popcount.shp")
+
+```
+
+Boundaries of dummy data
+
+```{r}
+boundaries_dummy <- sf::st_read("input/jrc_data/poly_dummy_mw_pop.shp")
+```
+
+Zambia Microcensus Data 2010
+
+```{r}
+
+micro_census_data <- haven::read_sav("input/SPSS files/DemographicsDIST.sav")
+```
+
+## Data Exploration
+
+Number of households
+
+```{r}
+households <- micro_census_data |>
+  dplyr::mutate(
+    HH_ID = paste(PROV_P, DIST_P, CONST_P, HOUSEHOLD_SERIAL_NUMBER_P, REGION_P),
+    CONST_P = CONST_P
+  ) |>
+  dplyr::group_by(HH_ID, CONST_P) |>
+  count(name = "Number of People") |>
+  tibble::tibble()
+```
+
+Visualize GPS location
+
+```{r}
+
+tmap::tm_shape(shp = boundaries_dummy) +
+  tmap::tm_borders() +
+tmap::tm_shape(shp = gps_points) +
+  tmap::tm_symbols(
+    col = "blue", fill = "blue"
+  )
+```
+
+## Data Transformation
+
+### Create Artificial Constituencies in the GPS by cluster analysis
+
+Because the GPS data is randomly generated, we want to create artificial clusters that are going to represent our constitencies so as we have a logical assignment of households within buildings. if we do not do this, we will have two houselhold from different constituencies in one building Which violates spatial laws.
+
+```{r}
+# transform the gps coordinates into a matrix
+coords_matrix <- st_coordinates(gps_points)
+
+# Create clusters to represent constituencies
+set.seed(123)
+kmeans_result <- kmeans(coords_matrix, centers = 150)
+
+# Add cluster ID to buildings
+gps_points$constituency_id <- kmeans_result$cluster
+
+```
+
+```{r}
+# map the clusters
+# Create a palette with 150 colors
+big_palette <- colorRampPalette(brewer.pal(12, "Set3"))(150)
+
+tm_shape(gps_points) +
+  tm_symbols(
+    col = "constituency_id",
+    palette = big_palette,
+    size = 0.5,
+    title.col = "Cluster ID"
+  ) +
+  tm_layout(legend.outside = TRUE)
+
+```
+
+```{r}
+# Map constituencies clusters
+ggplot2::ggplot(data = gps_points) +
+  ggplot2::geom_sf(aes(color = constituency_id), size = .5) +
+  ggplot2::theme_void()
+```
+
+assign unique ids to buildings
+
+```{r}
+gps_points$id <- c(1:length(gps_points$geometry))
+```
+
+## create dummy census data
+
+```{r}
+
+dummy_microcensus <- micro_census_data |>
+  dplyr::mutate(
+    HH_ID = paste(PROV_P, DIST_P, CONST_P, HOUSEHOLD_SERIAL_NUMBER_P, REGION_P)
+  ) |>
+  dplyr::select(
+    PROV_P,
+    DIST_P,
+    CONST_P,
+    REGION_P,
+    HOUSEHOLD_SERIAL_NUMBER_P,
+    HH_ID,
+    PID_P,
+    P2_MEMBERSHIP_P,
+    P4_SEX_P,
+    P5_AGE_P,
+    P42_LAST_12_MON_P,
+    P32_ACTIVITY_LAST_12_MONTHS_P,
+    P37_AGE_FIRST_MARRAIGE_P
+  )
+```
+
+```{r}
+attr(dummy_microcensus$HH_ID, "label") <- "Household Unique Identifier"
+```
+
+## Assign households to each buildings
+
+```{r}
+set.seed(123)
+
+# Simulated data
+# gps_points <- data.frame(id = ..., constituency_id = ...)
+# households <- data.frame(household_id = ..., CONST_P = ...)
+
+# Step 1: Count households and buildings per constituency
+hh_counts <- households |>
+  count(CONST_P, name = "n_households")
+
+building_counts <- gps_points |>
+  count(constituency_id, name = "n_buildings")
+
+# Step 2: Merge into assign_table
+assign_table <- hh_counts |>
+  inner_join(building_counts, by = c("CONST_P" = "constituency_id")) |>
+  mutate(remaining_hh = n_households - n_buildings)
+
+# Step 3: Assign 1 household per building
+assigned_minimum <- assign_table |>
+  rowwise() |>
+  mutate(
+    base_assignment = list(rep(
+      gps_points |> filter(constituency_id == CONST_P) |> pull(id),
+      length.out = n_buildings
+    ))
+  ) |>
+  ungroup() |>
+  unnest(cols = c(base_assignment))
+
+# Step 4: Assign remaining households randomly
+assigned_remaining <- assign_table |>
+  filter(remaining_hh > 0) |>
+  rowwise() |>
+  mutate(
+    extra_assignments = list(
+      sample(
+        gps_points |> filter(constituency_id == CONST_P) |> pull(id),
+        size = remaining_hh,
+        replace = TRUE
+      )
+    )
+  ) |>
+  ungroup() |>
+  unnest(cols = c(extra_assignments)) |>
+  rename(base_assignment = extra_assignments)
+
+# Step 5: Combine both sets of assignments
+all_assigned_buildings <- bind_rows(assigned_minimum, assigned_remaining) |>
+  group_by(CONST_P) |>
+  mutate(row_id = row_number())
+
+# Step 6: Match to households
+households_final <- households |>
+  group_by(CONST_P) |>
+  mutate(row_id = row_number()) |>
+  left_join(all_assigned_buildings, by = c("CONST_P", "row_id")) |>
+  select(-row_id)
+
+# Rename the building assignment column
+names(households_final)[names(households_final) == "base_assignment"] <- "assigned_building_id"
+
+# Optional: Add geometry by joining to gps_points
+households_with_coords <- households_final |>
+  left_join(gps_points, by = c("assigned_building_id" = "id"))
+```
+
+## Assign building IDs to the dummy micro-census data
+
+```{r}
+
+dummy_microcensus <- 
+  dummy_microcensus |>
+  dplyr::left_join(households_with_coords |> 
+                     dplyr::select(HH_ID, assigned_building_id),
+                   by = c("HH_ID")
+                  )
+```
+
+Export micro-census data into csv file
+
+```{r}
+
+write.csv(dummy_microcensus, file = "output/dummy_microcensus.csv")
 ```
