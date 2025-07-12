@@ -26,7 +26,7 @@ GPS locations of buildings hosting households
 
 ```{r}
 
-gps_points <- sf::st_read("input/jrc_data/point_dummy_mw_popcount.shp")
+gps_points <- sf::st_read("input/jrc_data/new_points/point_dummy_mw_popcount.shp")
 
 ```
 
@@ -112,41 +112,6 @@ ggplot2::ggplot(data = gps_points) +
   ggplot2::theme_void()
 ```
 
-assign unique ids to buildings
-
-```{r}
-gps_points$id <- c(1:length(gps_points$geometry))
-```
-
-## create dummy census data
-
-```{r}
-
-dummy_microcensus <- micro_census_data |>
-  dplyr::mutate(
-    HH_ID = paste(PROV_P, DIST_P, CONST_P, HOUSEHOLD_SERIAL_NUMBER_P, REGION_P)
-  ) |>
-  dplyr::select(
-    PROV_P,
-    DIST_P,
-    CONST_P,
-    REGION_P,
-    HOUSEHOLD_SERIAL_NUMBER_P,
-    HH_ID,
-    PID_P,
-    P2_MEMBERSHIP_P,
-    P4_SEX_P,
-    P5_AGE_P,
-    P42_LAST_12_MON_P,
-    P32_ACTIVITY_LAST_12_MONTHS_P,
-    P37_AGE_FIRST_MARRAIGE_P
-  )
-```
-
-```{r}
-attr(dummy_microcensus$HH_ID, "label") <- "Household Unique Identifier"
-```
-
 ## Assign households to each buildings
 
 ```{r}
@@ -217,6 +182,35 @@ households_with_coords <- households_final |>
   left_join(gps_points, by = c("assigned_building_id" = "id"))
 ```
 
+## create dummy census data
+
+```{r}
+
+dummy_microcensus <- micro_census_data |>   
+  dplyr::mutate(HH_ID = paste(PROV_P, DIST_P, CONST_P, HOUSEHOLD_SERIAL_NUMBER_P, REGION_P)) |>   dplyr::select(
+  PROV_P,
+  DIST_P,
+  CONST_P,
+  REGION_P,
+  HOUSEHOLD_SERIAL_NUMBER_P,
+  HH_ID,
+  PID_P,
+  P2_MEMBERSHIP_P,
+  P4_SEX_P,
+  P5_AGE_P,
+  P42_LAST_12_MON_P,
+  P32_ACTIVITY_LAST_12_MONTHS_P,
+  P37_AGE_FIRST_MARRAIGE_P
+)
+```
+
+```{r}
+
+attr(dummy_microcensus$HH_ID, "label") <- "Household Unique Identifier"
+```
+
+## 
+
 ## Assign building IDs to the dummy micro-census data
 
 ```{r}
@@ -229,9 +223,41 @@ dummy_microcensus <-
                   )
 ```
 
-Export micro-census data into csv file
+```{r}
+
+dummy_microcensus <- dummy_microcensus |>
+  dplyr::select(1:7, assigned_building_id, everything())
+```
+
+## Compute the Number of People per Building
 
 ```{r}
 
-write.csv(dummy_microcensus, file = "output/dummy_microcensus.csv")
+people_per_building <- dummy_microcensus |>
+  dplyr::group_by(assigned_building_id) |>
+  count(name = "Building_pop")
+```
+
+## Assign People per Building to GPS Points
+
+```{r}
+
+gps_points <- gps_points |>
+  dplyr::left_join(people_per_building,
+                   by = c("id" = "assigned_building_id")
+                   )
+```
+
+## Export new point data
+
+```{r}
+
+sf::st_write(gps_points, "output/point_dummy_mw_popcount_new.shp", delete_layer = T)
+```
+
+## Export micro-census data into sav file
+
+```{r}
+
+heaven::write_sav(dummy_microcensus, file = "output/dummy_microcensus.sav")
 ```

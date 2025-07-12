@@ -1,0 +1,31 @@
+---
+title: "Application of DEGURBA to Micro-Census Data"
+author: "Derrick Demeveng - UNFPA"
+format: html
+---
+
+## INTRODUCTION
+
+## LOAD LIBRARIES
+
+```{r}
+
+if(!require("pacman")) install.packages("pacman")
+
+pacman::p_load(
+  tidyverse,
+  ggplot2,
+  sf,
+  haven,
+  gt,
+  tmap,
+  RColorBrewer
+)
+```
+
+## LOAD DATA
+
+```{r}
+
+classified_gps_points <- sf::st_read("input/jrc_data/new_points/point_dummy_mw_popcount.shp")
+```
