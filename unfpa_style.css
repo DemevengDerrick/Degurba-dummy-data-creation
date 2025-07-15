@@ -1,0 +1,70 @@
+/* UNFPA Branding Style for HTML output */
+
+/* Change background to white and text to dark */
+body {
+  background-color: #ffffff;
+  color: #222222;
+  font-family: 'Arial', sans-serif;
+  font-size: 14px;
+}
+
+/* Title Style */
+h1.title {
+  color: #FF6600; /* UNFPA orange */
+  font-weight: bold;
+  text-align: center;
+}
+
+/* Author Style */
+h4.author {
+  text-align: center;
+  font-style: italic;
+  margin-bottom: 20px;
+}
+
+/* Date Style */
+h4.date {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+/* Section Headers */
+h2, h3, h4 {
+  color: #FF6600; /* UNFPA orange */
+}
+
+/* Table of contents */
+#TOC {
+  background-color: #f7f7f7;
+  border: 1px solid #cccccc;
+  padding: 10px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+th {
+  background-color: #FF6600;
+  color: white;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  margin-top: 50px;
+  font-size: 12px;
+  color: #666666;
+}
+
+/* Add some spacing between sections */
+section {
+  margin-bottom: 30px;
+}

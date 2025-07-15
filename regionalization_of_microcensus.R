@@ -26,6 +26,7 @@ boundaries_dummy <- sf::st_read("input/jrc_data/poly_dummy_mw_pop.shp")
 
 
 # ASSIGN MICROCENSUS TO DUMMY BOUNDARIES ----------------------------------
+
 micro_census_data <- micro_census_data |>
   dplyr::mutate(HH_ID = paste(PROV_P, DIST_P, CONST_P, HOUSEHOLD_SERIAL_NUMBER_P, REGION_P))
 
@@ -108,6 +109,9 @@ attr(micro_clustered2$ZONE, "label") <- "Urban - Rural"
 # EXPORT SAMPLE -----------------------------------------------------------
 
 haven::write_sav(micro_clustered2, path = "output/cleaned_dummy_data.sav")
+
+
+
 
 
 
