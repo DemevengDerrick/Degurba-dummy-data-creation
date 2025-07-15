@@ -97,4 +97,4 @@ hist(dummy_microcensus$P37_AGE_FIRST_MARRAIGE_P)
 
 # EXPORT SAMPLE -----------------------------------------------------------
 
-haven::write_sav(dummy_microcensus, path = "output/stratified_systematic_sample.sav")
+haven::write_sav(sampled_data, path = "output/stratified_systematic_sample.sav")
